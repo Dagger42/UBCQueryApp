@@ -1,0 +1,19 @@
+{
+	"title": "Dataset is invalid",
+	"input": {
+		"WHERE": {
+			"GT": {
+				"poop_avg": 97
+			}
+		},
+		"OPTIONS": {
+			"COLUMNS": [
+				"poop_dept",
+				"poop_avg"
+			],
+			"ORDER": "poop_avg"
+		}
+	},
+	"errorExpected": true,
+	"expected": "InsightError"
+}
