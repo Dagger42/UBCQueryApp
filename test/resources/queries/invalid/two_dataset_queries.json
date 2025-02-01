@@ -1,0 +1,19 @@
+{
+	"title": "Querying two datasets",
+	"input": {
+		"WHERE": {
+			"GT": {
+				"poop_avg": 97
+			}
+		},
+		"OPTIONS": {
+			"COLUMNS": [
+				"sections_dept",
+				"set2_avg"
+			],
+			"ORDER": "sections_avg"
+		}
+	},
+	"errorExpected": true,
+	"expected": "InsightError"
+}

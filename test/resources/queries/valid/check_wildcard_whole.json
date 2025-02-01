@@ -1,0 +1,19 @@
+{
+	"title": "wildcard check whole",
+	"input": {
+		"WHERE": {
+			"AND": [
+				{ "GT": { "sections_avg": 95 } },
+				{ "IS": { "sections_dept": "*math*" } }
+			]
+		},
+		"OPTIONS": {
+			"COLUMNS": ["sections_dept", "sections_avg", "sections_title"],
+			"ORDER": "sections_avg"
+		}
+	},
+	"errorExpected": false,
+	"expected": [
+		{"sections_dept":"math","sections_avg":95.56,"sections_title":"lie theory i"},{"sections_dept":"math","sections_avg":95.56,"sections_title":"lie theory i"},{"sections_dept":"math","sections_avg":95.67,"sections_title":"functional analy"},{"sections_dept":"math","sections_avg":95.67,"sections_title":"functional analy"},{"sections_dept":"math","sections_avg":96.25,"sections_title":"prt diff equa i"},{"sections_dept":"math","sections_avg":96.25,"sections_title":"prt diff equa i"},{"sections_dept":"math","sections_avg":96.33,"sections_title":"msc major essay"},{"sections_dept":"math","sections_avg":96.44,"sections_title":"algebra ii"},{"sections_dept":"math","sections_avg":96.44,"sections_title":"algebra ii"},{"sections_dept":"math","sections_avg":96.83,"sections_title":"probability ii"},{"sections_dept":"math","sections_avg":96.83,"sections_title":"probability ii"},{"sections_dept":"math","sections_avg":97.09,"sections_title":"harmonic anal i"},{"sections_dept":"math","sections_avg":97.09,"sections_title":"harmonic anal i"},{"sections_dept":"math","sections_avg":97.25,"sections_title":"diff geometry i"},{"sections_dept":"math","sections_avg":97.25,"sections_title":"diff geometry i"},{"sections_dept":"math","sections_avg":97.48,"sections_title":"algb geometry i"},{"sections_dept":"math","sections_avg":97.48,"sections_title":"algb geometry i"},{"sections_dept":"math","sections_avg":99.78,"sections_title":"algb topology i"},{"sections_dept":"math","sections_avg":99.78,"sections_title":"algb topology i"}
+	]
+}

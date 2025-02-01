@@ -1,0 +1,5 @@
+{
+	"title": "test EQ comparator",
+	"input": {"WHERE":{"EQ":{"sections_avg":65}},"OPTIONS":{"COLUMNS":["sections_dept","sections_avg"],"ORDER":"sections_avg"}},
+	"errorExpected": false,
+	"expected": [{"sections_dept":"wrds","sections_avg":65},{"sections_dept":"psyc","sections_avg":65},{"sections_dept":"phil","sections_avg":65},{"sections_dept":"math","sections_avg":65},{"sections_dept":"math","sections_avg":65},{"sections_dept":"math","sections_avg":65},{"sections_dept":"ital","sections_avg":65},{"sections_dept":"frst","sections_avg":65},{"sections_dept":"frst","sections_avg":65},{"sections_dept":"frst","sections_avg":65},{"sections_dept":"frst","sections_avg":65},{"sections_dept":"fmst","sections_avg":65},{"sections_dept":"engl","sections_avg":65},{"sections_dept":"engl","sections_avg":65},{"sections_dept":"engl","sections_avg":65},{"sections_dept":"engl","sections_avg":65},{"sections_dept":"educ","sections_avg":65},{"sections_dept":"educ","sections_avg":65},{"sections_dept":"clst","sections_avg":65},{"sections_dept":"clst","sections_avg":65},{"sections_dept":"chin","sections_avg":65},{"sections_dept":"busi","sections_avg":65}]}
