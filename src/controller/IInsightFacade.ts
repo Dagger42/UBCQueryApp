@@ -39,7 +39,7 @@ export class ResultTooLargeError extends Error {
 }
 
 export interface IInsightFacade {
-	/** kl
+	/**
 	 * Add a dataset to insightUBC.
 	 *
 	 * @param id  The id of the dataset being added. Follows the format /^[^_]+$/
