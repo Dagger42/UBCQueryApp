@@ -3,8 +3,8 @@ import JSZip from "jszip";
 import {InsightError} from "./IInsightFacade";
 
 export default class DataSetProcessor {
-	sections : Section[];
-	totalSections : number;
+	public sections : any[];
+	public totalSections : number;
 
 	constructor() {
 		this.sections = [];

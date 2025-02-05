@@ -7,6 +7,7 @@ import {
 	NotFoundError
 } from "./IInsightFacade";
 import DataSetProcessor from "./DataSetProcessor";
+import {QueryProcessor} from "./QueryProcessor";
 
 /**
  * This is the main programmatic entry point for the project.
@@ -16,10 +17,12 @@ import DataSetProcessor from "./DataSetProcessor";
 export default class InsightFacade implements IInsightFacade {
 	private datasets: Map<string, DataSetProcessor>; // Map of dataset ID to its parsed sections
 	private insightDatasets: Map<string, InsightDataset>;
+	private queryProcessor: QueryProcessor;
 
 	constructor() {
 		this.datasets = new Map();
 		this.insightDatasets = new Map();
+		this.queryProcessor = new QueryProcessor();
 	}
 
 	private idIsInvalid(id: string) : boolean {
@@ -27,7 +30,7 @@ export default class InsightFacade implements IInsightFacade {
 	}
 
 	private getIdList(): string[] {
-		let result : string[] =[];
+		const result : string[] =[];
 		for (const id of this.datasets.keys()) {
 			result.push(id);
 		}
@@ -81,7 +84,7 @@ export default class InsightFacade implements IInsightFacade {
 
 	public async performQuery(query: unknown): Promise<InsightResult[]> {
 		// TODO: Remove this once you implement the methods!
-		throw new Error(`InsightFacadeImpl::performQuery() is unimplemented! - query=${query};`);
+		return this.queryProcessor.performQuery(query, this.datasets);
 	}
 
 	public async listDatasets(): Promise<InsightDataset[]> {
