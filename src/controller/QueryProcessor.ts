@@ -1,4 +1,5 @@
 import { InsightError, InsightResult, ResultTooLargeError } from "./IInsightFacade";
+import DataSetProcessor from "./DataSetProcessor";
 
 export interface Filter {
 	[key: string]: string | number | Filter[] | Filter;
@@ -28,9 +29,9 @@ export class QueryProcessor {
 		audit: "n",
 	};
 	private seenDatasets: string[] = [];
-	private sections: any;
+	private sections?: Map<string,DataSetProcessor>;
 
-	public async performQuery(input: any, sections: any): Promise<InsightResult[]> {
+	public async performQuery(input: any, sections: Map<string,DataSetProcessor>): Promise<InsightResult[]> {
 		this.seenDatasets = [];
 		this.sections = sections;
 		if (!this.validateQuery(input)) {
@@ -43,7 +44,12 @@ export class QueryProcessor {
 		const order = input.OPTIONS.ORDER;
 
 		const insightResults: InsightResult[] = [];
-		for (const section of this.sections[queryingDataset]) {
+		const processor = this.sections.get(queryingDataset);
+		if (!processor) {
+			throw new InsightError();
+		}
+
+		for (const section of processor.sections) {
 			if (this.applyQuery(section, input)) {
 				const result: InsightResult = {};
 				columns.forEach((key: string) => {
@@ -231,14 +237,19 @@ export class QueryProcessor {
 		const queryKey = key.substring(dashIdx + 1);
 
 		let isValid = true;
-		if (datasetId in this.sections && this.seenDatasets.indexOf(datasetId) === -1) {
+		const sections = this.sections;
+		if (!sections) {
+			return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
+		}
+
+		if (sections.has(datasetId) && this.seenDatasets.indexOf(datasetId) === -1) {
 			this.seenDatasets.push(datasetId);
 			if (this.seenDatasets.length > 1) {
 				isValid = false;
 			}
 		}
 
-		if (!(queryKey in this.validKeys) || dashIdx === -1 || !(datasetId in this.sections)) {
+		if (!(queryKey in this.validKeys) || dashIdx === -1 || !(sections.has(datasetId))) {
 			isValid = false;
 		}
 
