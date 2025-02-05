@@ -15,7 +15,7 @@ import {QueryProcessor} from "./QueryProcessor";
  *
  */
 export default class InsightFacade implements IInsightFacade {
-	private datasets: Map<string, DataSetProcessor>; // Map of dataset ID to its parsed sections
+	private readonly datasets: Map<string, DataSetProcessor>; // Map of dataset ID to its parsed sections
 	private insightDatasets: Map<string, InsightDataset>;
 	private queryProcessor: QueryProcessor;
 
@@ -38,49 +38,43 @@ export default class InsightFacade implements IInsightFacade {
 	}
 
 	public async addDataset(id: string, content: string, kind: InsightDatasetKind): Promise<string[]> {
-		return new Promise(async (resolve, reject) => {
-			try {
-				if (this.idIsInvalid(id)) {
-					return reject(new InsightError("Dataset ID is invalid"));
-				}
-				if (this.datasets.has(id)) {
-					return reject(new InsightError("There is already a dataset with this id"));
-				}
-				const currDataset: DataSetProcessor = new DataSetProcessor();
-				await currDataset.setSections(content);
-				this.datasets.set(id, currDataset);
-				const currInsightDataset : InsightDataset = {
-					id : id,
-					kind : InsightDatasetKind.Sections,
-					numRows : currDataset.totalSections
-				}
-				this.insightDatasets.set(id, currInsightDataset);
-				if (currDataset.sections.length === 0) {
-					return reject(new InsightError("No valid sections found"));
-				}
-				const stringArr: string[] = this.getIdList();
-				return resolve(stringArr);
-			} catch (err) {
-				return reject(new InsightError("Invalid dataset content, zip file has issues"));
-			}
-		})
-	}
+		if (this.idIsInvalid(id)) {
+			throw new InsightError("Dataset ID is invalid");
+		}
+		if (this.datasets.has(id)) {
+			throw new InsightError("There is already a dataset with this id");
+		}
+		const currDataset: DataSetProcessor = new DataSetProcessor();
+		await currDataset.setSections(content);
+		this.datasets.set(id, currDataset);
 
+		const currInsightDataset: InsightDataset = {
+			id: id,
+			kind: InsightDatasetKind.Sections,
+			numRows: currDataset.totalSections
+		};
+		this.insightDatasets.set(id, currInsightDataset);
+
+		if (currDataset.sections.length === 0) {
+			throw new InsightError("No valid sections found");
+		}
+		return this.getIdList();
+	}
 
 	public async removeDataset(id: string): Promise<string> {
-		return new Promise(async (resolve, reject) => {
-			if (this.idIsInvalid(id)) {
-				return reject(new InsightError("Dataset ID is invalid"));
-			}
-			if (!this.datasets.has(id)) {
-				return reject(new NotFoundError("There is no dataset with this ID"));
-			}
-			this.datasets.delete(id);
-			this.insightDatasets.delete(id);
-			return resolve(id);
-		})
+		if (this.idIsInvalid(id)) {
+			throw new InsightError("Dataset ID is invalid");
+		}
+		if (!this.datasets.has(id)) {
+			throw new NotFoundError("There is no dataset with this ID");
+		}
 
+		this.datasets.delete(id);
+		this.insightDatasets.delete(id);
+
+		return id;
 	}
+
 
 	public async performQuery(query: unknown): Promise<InsightResult[]> {
 		// TODO: Remove this once you implement the methods!

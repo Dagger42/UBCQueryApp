@@ -14,24 +14,29 @@ export default class DataSetProcessor {
 
 	//content is of type base64 string
 	//handles the base64 string, separates into individual files -> calls createSectionForFile on each valid file
-	public async setSections(content : string) {
+	public async setSections(content: string): Promise<void> {
 		const zip = new JSZip();
 		const binaryData = Buffer.from(content, "base64");
 		const zippedData = await zip.loadAsync(binaryData);
-		const filePaths = Object.keys(zippedData.files)
-		for (const filePath of filePaths) {
-			if(!filePath.startsWith("courses/")) {
-				throw new InsightError("Must be only a courses subdirectory within zip")
-			}
+		const filePaths = Object.keys(zippedData.files);
+
+		if (filePaths.some(filePath => !filePath.startsWith("courses/"))) {
+			throw new InsightError("Must be only a courses subdirectory within zip");
+		}
+
+		// Process files concurrently
+		await Promise.all(filePaths.map(async (filePath) => {
 			const fileName = filePath.substring("courses/".length);
 			if (fileName.length > 1) {
-				this.createSectionForFile(await zippedData.files[filePath].async("text"));
+				const fileContent = await zippedData.files[filePath].async("text");
+				this.createSectionForFile(fileContent);
 			}
-		}
+		}));
 	}
 
+
 	// JSONifies file and parses each course section by creating sections to be added to this.sections
-	public createSectionForFile(fileContents: string) {
+	public createSectionForFile(fileContents: string) : void {
 		const jsonData = JSON.parse(fileContents);
 		const requiredFields: string[] = ["Course", "Title", "Avg", "id",
 			"Professor", "Subject", "Year", "Avg", "Pass", "Fail", "Audit"];
