@@ -17,8 +17,10 @@ import path from "path";
  *
  */
 export default class InsightFacade implements IInsightFacade {
+
 	//private readonly datasets: Map<string, DataSetProcessor>; // Map of dataset ID to its parsed sections
 	//private insightDatasets: Map<string, InsightDataset>;
+
 	private queryProcessor: QueryProcessor;
 
 	constructor() {
@@ -91,6 +93,7 @@ export default class InsightFacade implements IInsightFacade {
 
 		return id;
 	}
+
 
 	public async performQuery(query: unknown): Promise<InsightResult[]> {
 		const datasetIds= await this.getIdList();

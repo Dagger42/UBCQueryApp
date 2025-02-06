@@ -21,6 +21,7 @@ export default class DataSetProcessor {
 
 //content is of type base64 string
 //handles the base64 string, separates into individual files -> calls createSectionForFile on each valid file
+
 	public async setSections(content: string): Promise<void> {
 		const zip = new JSZip();
 		const binaryData = Buffer.from(content, "base64");
@@ -45,6 +46,7 @@ export default class DataSetProcessor {
 
 // JSONifies file and parses each course section by creating sections to be added to this.sections
 	public createSectionForFile(fileContents: string): void {
+
 		const jsonData = JSON.parse(fileContents);
 		const requiredFields: string[] = [
 			"Course",
