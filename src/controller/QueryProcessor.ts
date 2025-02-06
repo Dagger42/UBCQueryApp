@@ -1,5 +1,5 @@
 import { InsightError, InsightResult, ResultTooLargeError } from "./IInsightFacade";
-import DataSetProcessor from "./DataSetProcessor";
+import fs from "fs-extra";
 
 export interface Filter {
 	[key: string]: string | number | Filter[] | Filter;
@@ -29,9 +29,9 @@ export class QueryProcessor {
 		audit: "n",
 	};
 	private seenDatasets: string[] = [];
-	private sections?: Map<string,DataSetProcessor>;
+	private sections : string[] = [];
 
-	public async performQuery(input: any, sections: Map<string,DataSetProcessor>): Promise<InsightResult[]> {
+	public async performQuery(input: any, sections: string[]): Promise<InsightResult[]> {
 		this.seenDatasets = [];
 		this.sections = sections;
 		if (!this.validateQuery(input)) {
@@ -44,16 +44,14 @@ export class QueryProcessor {
 		const order = input.OPTIONS.ORDER;
 
 		const insightResults: InsightResult[] = [];
-		const processor = this.sections.get(queryingDataset);
-		if (!processor) {
-			throw new InsightError();
-		}
 
-		for (const section of processor.sections) {
-			if (this.applyQuery(section, input)) {
+		const jsonData = await fs.readJson("../../data/" + queryingDataset + ".json");
+		for (const section of jsonData.sections) {
+			const temp: any = section;
+			if (this.applyFilters(section, input.WHERE)) {
 				const result: InsightResult = {};
 				columns.forEach((key: string) => {
-					result[key] = section[this.isValidKey(key).queryKey];
+					result[key] = temp[this.isValidKey(key).queryKey];
 				});
 
 				insightResults.push(result);
@@ -242,41 +240,44 @@ export class QueryProcessor {
 			return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
 		}
 
-		if (sections.has(datasetId) && this.seenDatasets.indexOf(datasetId) === -1) {
+		if (sections.indexOf(datasetId) >= 0 && this.seenDatasets.indexOf(datasetId) === -1) {
 			this.seenDatasets.push(datasetId);
 			if (this.seenDatasets.length > 1) {
 				isValid = false;
 			}
 		}
 
-		if (!(queryKey in this.validKeys) || dashIdx === -1 || !(sections.has(datasetId))) {
+		if (!(queryKey in this.validKeys) || dashIdx === -1 || !(sections.indexOf(datasetId) >= 0)) {
 			isValid = false;
 		}
 
 		return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
 	}
 
-	private applyQuery(section: any, query: any): boolean {
+	private applyFilters(section: any, query: any): boolean {
 		const filterStr = Object.keys(query)[0];
 		const keyVal = query[filterStr];
 
 		switch (filterStr) {
 			case "AND":
 				for (const q of keyVal) {
-					if (!this.applyQuery(section, q)) {
+					if (!this.applyFilters(section, q)) {
 						return false;
 					}
 				}
-				break;
+				return true;
 			case "OR":
+				let atLeastOne = false;
 				for (const q of keyVal) {
-					if (this.applyQuery(section, q)) {
+					if (this.applyFilters(section, q)) {
+						atLeastOne = true;
 						break;
 					}
 				}
-				break;
+
+				return atLeastOne;
 			case "NOT":
-				return !this.applyQuery(section, keyVal);
+				return !this.applyFilters(section, keyVal);
 			case "GT":
 			case "LT":
 			case "EQ":
