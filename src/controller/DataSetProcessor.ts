@@ -67,13 +67,13 @@ export default class DataSetProcessor {
 		);
 		validSections.forEach((section: any) => {
 			let sectionYear : number;
-			if (section.Section === "Overall") {
+			if (section.Section === "overall") {
 				sectionYear = 1900;
 			} else {
-				sectionYear = section.Year;
+				sectionYear = Number(section.Year);
 			}
 			const currSection: Section = {
-				uuid: section.id,
+				uuid: String(section.id),
 				id: section.Course,
 				title: section.Title,
 				instructor: section.Professor,
