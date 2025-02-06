@@ -22,7 +22,7 @@ export class QueryProcessor {
 		title: "s",
 		instructor: "s",
 		dept: "s",
-		year: "s",
+		year: "n",
 		avg: "n",
 		pass: "n",
 		fail: "n",
@@ -45,7 +45,7 @@ export class QueryProcessor {
 
 		const insightResults: InsightResult[] = [];
 
-		const jsonData = await fs.readJson("../../data/" + queryingDataset + ".json");
+		const jsonData = await fs.readJson("./data/" + queryingDataset + ".json");
 		for (const section of jsonData.sections) {
 			const temp: any = section;
 			if (this.applyFilters(section, input.WHERE)) {
