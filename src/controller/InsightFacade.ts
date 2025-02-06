@@ -17,7 +17,6 @@ import path from "path";
  *
  */
 export default class InsightFacade implements IInsightFacade {
-
 	//private readonly datasets: Map<string, DataSetProcessor>; // Map of dataset ID to its parsed sections
 	//private insightDatasets: Map<string, InsightDataset>;
 
@@ -37,23 +36,22 @@ export default class InsightFacade implements IInsightFacade {
 	private async getIdList(): Promise<string[]> {
 		const dataDir = path.resolve(__dirname, "../../data");
 		const files = await fs.readdir(dataDir);
-		return files.map(file => path.parse(file).name);
+		return files.map((file) => path.parse(file).name);
 	}
 
 	// Creates the data directory if not already there
-	public async createDataDir() : Promise<void> {
+	public async createDataDir(): Promise<void> {
 		const dirPath = path.resolve(__dirname, "../../", "data");
 		await fs.ensureDir(dirPath);
 	}
 
 	// Checks if there exists a dataset on disk with given id
-	private async localHas(id: string) {
+	private async localHas(id: string): Promise<boolean> {
 		const filePath = path.resolve(__dirname, "../../data", id + ".json");
 		return await fs.pathExists(filePath);
 	}
 
 	public async addDataset(id: string, content: string, kind: InsightDatasetKind): Promise<string[]> {
-
 		if (this.idIsInvalid(id)) {
 			throw new InsightError("Dataset ID is invalid");
 		}
@@ -67,7 +65,7 @@ export default class InsightFacade implements IInsightFacade {
 
 		try {
 			await currDataset.setSections(content);
-		} catch (error) {
+		} catch (_error) {
 			throw new InsightError("content was not readable");
 		}
 
@@ -84,7 +82,7 @@ export default class InsightFacade implements IInsightFacade {
 			throw new InsightError("Dataset ID is invalid");
 		}
 		// check if this is a valid dataset id (check disk folder)
-		if (!await this.localHas(id)) {
+		if (!(await this.localHas(id))) {
 			throw new NotFoundError("There is no dataset with this ID");
 		}
 
@@ -94,24 +92,22 @@ export default class InsightFacade implements IInsightFacade {
 		return id;
 	}
 
-
 	public async performQuery(query: unknown): Promise<InsightResult[]> {
-		const datasetIds= await this.getIdList();
+		const datasetIds = await this.getIdList();
 		return this.queryProcessor.performQuery(query, datasetIds);
 	}
 
 	public async listDatasets(): Promise<InsightDataset[]> {
-		await this.createDataDir()
-		const result : InsightDataset[] = [];
+		await this.createDataDir();
 		const dataDir = path.resolve(__dirname, "../../data");
 		const files = await fs.readdir(dataDir);
 
-		for (const file of files) {
-			const filePath = path.join(dataDir, file);
-			const jsonData = await fs.readJson(filePath);
-			result.push(jsonData.insightResult as InsightDataset);
-		}
-		return result;
+		return await Promise.all(
+			files.map(async (file) => {
+				const filePath = path.join(dataDir, file);
+				const jsonData = await fs.readJson(filePath);
+				return jsonData.insightResult as InsightDataset;
+			})
+		);
 	}
-
 }

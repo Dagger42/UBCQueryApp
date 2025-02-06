@@ -29,7 +29,7 @@ export class QueryProcessor {
 		audit: "n",
 	};
 	private seenDatasets: string[] = [];
-	private sections : string[] = [];
+	private sections: string[] = [];
 
 	public async performQuery(input: any, sections: string[]): Promise<InsightResult[]> {
 		this.seenDatasets = [];
