@@ -29,7 +29,7 @@ export class QueryProcessor {
 		audit: "n",
 	};
 	private seenDatasets: string[] = [];
-	private sections : string[] = [];
+	private sections: string[] = [];
 
 	public async performQuery(input: any, sections: string[]): Promise<InsightResult[]> {
 		this.seenDatasets = [];
@@ -296,7 +296,7 @@ export class QueryProcessor {
 		const keyVal: number = obj[key];
 
 		const { queryKey } = this.isValidKey(key);
-		const sectionVal : number = section[queryKey];
+		const sectionVal: number = section[queryKey];
 		switch (compStr) {
 			case "GT":
 				return sectionVal > keyVal;
