@@ -69,7 +69,7 @@ export default class DataSetProcessor {
 			"Fail",
 			"Audit",
 		];
-		
+
 		if (!("result" in jsonData)) {
 			return;
 		}
