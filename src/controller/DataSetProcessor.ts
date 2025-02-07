@@ -49,7 +49,14 @@ export default class DataSetProcessor {
 
 	// JSONifies file and parses each course section by creating sections to be added to this.sections
 	public createSectionForFile(fileContents: string): void {
-		const jsonData = JSON.parse(fileContents);
+		
+		let jsonData;
+		try {
+			jsonData = JSON.parse(fileContents);
+		} catch (_err) {
+			return;
+		}
+		
 		const requiredFields: string[] = [
 			"Course",
 			"Title",
@@ -63,6 +70,14 @@ export default class DataSetProcessor {
 			"Fail",
 			"Audit",
 		];
+		
+		if (!("result" in jsonData)) {
+			return;
+		}
+
+		if (!Array.isArray(jsonData.result)) {
+			return;
+		}
 		const validSections = jsonData.result.filter((section: any) =>
 			requiredFields.every((field) => section[field] !== undefined && section[field] !== null)
 		);
