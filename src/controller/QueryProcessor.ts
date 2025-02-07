@@ -22,7 +22,7 @@ export class QueryProcessor {
 		title: "s",
 		instructor: "s",
 		dept: "s",
-		year: "s",
+		year: "n",
 		avg: "n",
 		pass: "n",
 		fail: "n",
@@ -45,7 +45,7 @@ export class QueryProcessor {
 
 		const insightResults: InsightResult[] = [];
 
-		const jsonData = await fs.readJson("../../data/" + queryingDataset + ".json");
+		const jsonData = await fs.readJson("./data/" + queryingDataset + ".json");
 		for (const section of jsonData.sections) {
 			const temp: any = section;
 			if (this.applyFilters(section, input.WHERE)) {
@@ -293,16 +293,17 @@ export class QueryProcessor {
 
 	public checkQueryKeyNumeric(section: any, obj: any, compStr: string): boolean {
 		const key = Object.keys(obj)[0];
-		const sectionVal: number = obj[key];
+		const keyVal: number = obj[key];
 
 		const { queryKey } = this.isValidKey(key);
+		const sectionVal : number = section[queryKey];
 		switch (compStr) {
 			case "GT":
-				return section[queryKey] > sectionVal;
+				return sectionVal > keyVal;
 			case "LT":
-				return section[queryKey] < sectionVal;
+				return sectionVal < keyVal;
 			case "EQ":
-				return section[queryKey] === sectionVal;
+				return sectionVal === keyVal;
 		}
 
 		return true;
