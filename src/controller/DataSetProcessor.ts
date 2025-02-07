@@ -27,7 +27,7 @@ export default class DataSetProcessor {
 		const zippedData = await zip.loadAsync(binaryData);
 		const filePaths = Object.keys(zippedData.files);
 
-		if (filePaths.some((filePath) => !filePath.startsWith("courses/"))) {
+		if (!filePaths.some((filePath) => filePath.startsWith("courses/"))) {
 			throw new InsightError("Must be only a courses subdirectory within zip");
 		}
 
@@ -49,14 +49,13 @@ export default class DataSetProcessor {
 
 	// JSONifies file and parses each course section by creating sections to be added to this.sections
 	public createSectionForFile(fileContents: string): void {
-		
 		let jsonData;
 		try {
 			jsonData = JSON.parse(fileContents);
 		} catch (_err) {
 			return;
 		}
-		
+
 		const requiredFields: string[] = [
 			"Course",
 			"Title",
@@ -78,6 +77,7 @@ export default class DataSetProcessor {
 		if (!Array.isArray(jsonData.result)) {
 			return;
 		}
+
 		const validSections = jsonData.result.filter((section: any) =>
 			requiredFields.every((field) => section[field] !== undefined && section[field] !== null)
 		);
