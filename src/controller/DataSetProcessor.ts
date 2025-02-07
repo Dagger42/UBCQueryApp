@@ -41,6 +41,10 @@ export default class DataSetProcessor {
 				}
 			})
 		);
+
+		if (this.sections.length === 0) {
+			throw new InsightError("No valid sections");
+		}
 	}
 
 	// JSONifies file and parses each course section by creating sections to be added to this.sections
