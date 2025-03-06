@@ -1,5 +1,6 @@
 import { InsightError, InsightResult, ResultTooLargeError } from "./IInsightFacade";
 import fs from "fs-extra";
+import { QueryGroup } from "./QueryGroup";
 
 export interface Filter {
 	[key: string]: string | number | Filter[] | Filter;
@@ -11,12 +12,13 @@ export interface Options {
 }
 
 export interface Query {
+	TRANSFORMATIONS?: any;
 	WHERE: Filter;
 	OPTIONS: Options;
 }
 
 export class QueryProcessor {
-	private validKeys: Record<string, string> = {
+	private validKeysSections: Record<string, string> = {
 		uuid: "s",
 		id: "s",
 		title: "s",
@@ -28,12 +30,31 @@ export class QueryProcessor {
 		fail: "n",
 		audit: "n",
 	};
+
+	private validKeysRooms: Record<string, string> = {
+		fullname: "s",
+		shortname: "s",
+		number: "s",
+		name: "s",
+		address: "s",
+		lat: "n",
+		lon: "n",
+		seats: "n",
+		type: "s",
+		furniture: "s",
+		href: "s",
+	};
+
 	private seenDatasets: string[] = [];
-	private sections: string[] = [];
+	private sections: any = {};
+	private queryGroup: QueryGroup | null = null;
 
 	public async performQuery(input: any, sections: string[]): Promise<InsightResult[]> {
 		this.seenDatasets = [];
-		this.sections = sections;
+		//this.sections = sections;
+		await this.getDatasetsWithTypes(sections);
+		this.queryGroup = new QueryGroup();
+
 		if (!this.validateQuery(input)) {
 			throw new InsightError();
 		}
@@ -47,15 +68,23 @@ export class QueryProcessor {
 
 		const jsonData = await fs.readJson("./data/" + queryingDataset + ".json");
 		for (const section of jsonData.sections) {
-			const temp: any = section;
+			const temp = section;
 			if (this.applyFilters(section, input.WHERE)) {
-				const result: InsightResult = {};
-				columns.forEach((key: string) => {
-					result[key] = temp[this.isValidKey(key).queryKey];
-				});
+				if ("TRANSFORMATIONS" in input) {
+					this.queryGroup.addEntry(section);
+				} else {
+					const result: InsightResult = {};
+					columns.forEach((key: string) => {
+						result[key] = temp[this.isValidKey(key).queryKey];
+					});
 
-				insightResults.push(result);
+					insightResults.push(result);
+				}
 			}
+		}
+
+		if ("TRANSFORMATIONS" in input) {
+			this.queryGroup.getResults(columns, insightResults);
 		}
 
 		const queryMaxResults = 5000;
@@ -63,8 +92,10 @@ export class QueryProcessor {
 			throw new ResultTooLargeError();
 		}
 
-		if (order) {
+		if (typeof order === "string") {
 			this.sortResultsByProperty(insightResults, order);
+		} else {
+			this.sortResultsWithTies(insightResults, order.keys, order.dir);
 		}
 
 		return insightResults;
@@ -76,11 +107,43 @@ export class QueryProcessor {
 			const p2 = b[property];
 
 			if (typeof p1 === "string") {
-				return p1.localeCompare(p2);
+				if (p1 === p2) {
+					return 0;
+				}
+
+				return p1 < p2 ? -1 : 1;
 			}
 
 			return p1 - p2;
 		});
+	}
+
+	public sortResultsWithTies(results: any[], keys: string[], dir: string): void {
+		results.sort((a: any, b: any) => {
+			for (const k of keys) {
+				const p1: any = a[k];
+				const p2: any = b[k];
+
+				if (p1 < p2) {
+					return dir === "UP" ? -1 : 1; // Ascending for 'UP', Descending otherwise
+				} else if (p1 > p2) {
+					return dir === "UP" ? 1 : -1;
+				}
+			}
+			return 0; // If all keys are equal, maintain order
+		});
+	}
+
+	private async getDatasetsWithTypes(ids: string[]): Promise<void> {
+		const promises = [];
+		for (const id of ids) {
+			promises.push(fs.readJson("./data/" + id + ".json"));
+		}
+
+		const jsons = await Promise.all(promises);
+		for (const json of jsons) {
+			this.sections[json.insightResult.id] = json.insightResult.kind;
+		}
 	}
 
 	private validateQuery(input: Query): boolean {
@@ -88,25 +151,41 @@ export class QueryProcessor {
 			return false;
 		}
 
-		const queryMaxKeys = 2;
-		if (Object.keys(input).length > queryMaxKeys) {
-			return false;
+		const requiredKeys = ["BODY", "OPTIONS"];
+		const optionalKey = "TRANSFORMATIONS";
+		for (const key of requiredKeys) {
+			if (!(key in input)) {
+				return false;
+			}
 		}
 
-		if (!("WHERE" in input) || !("OPTIONS" in input)) {
-			return false;
+		// Check if it contains only allowed keys
+		const allowedKeys = new Set([...requiredKeys, optionalKey]);
+		for (const key of Object.keys(input)) {
+			if (!allowedKeys.has(key)) {
+				return false;
+			}
 		}
 
 		const where = input.WHERE;
-		if (typeof where === "object" && Object.keys(where).length === 0) {
-			return this.validateOptions(input.OPTIONS);
-		}
-
-		if (!this.validateFilters(where)) {
+		if (typeof where !== "object") {
 			return false;
 		}
 
-		return this.validateOptions(input.OPTIONS);
+		if (Object.keys(where).length > 0 && !this.validateFilters(where)) {
+			return false;
+		}
+
+		let hasTransforms = false;
+		if ("TRANSFORMATIONS" in input) {
+			hasTransforms = true;
+			const trans = input.TRANSFORMATIONS;
+			if (!this.queryGroup?.initialize(this.seenDatasets[0], trans, this.isValidKey)) {
+				return false;
+			}
+		}
+
+		return this.validateOptions(input.OPTIONS, hasTransforms);
 	}
 
 	private validateFilters(input: any, parentFilter = ""): boolean {
@@ -143,7 +222,7 @@ export class QueryProcessor {
 		return false;
 	}
 
-	public validateOptions(options: Options): boolean {
+	public validateOptions(options: Options, hasTransforms: boolean): boolean {
 		if (typeof options !== "object") {
 			return false;
 		}
@@ -170,13 +249,55 @@ export class QueryProcessor {
 			return false;
 		}
 
+		const selectableKeys = this.queryGroup?.getAllSelectableKeys();
 		for (const key of columns) {
+			if (hasTransforms && selectableKeys?.indexOf(key) === -1) {
+				return false;
+			}
+
 			if (!this.isValidKey(key).isValid) {
 				return false;
 			}
 		}
 
-		return !(order && columns.indexOf(order) === -1);
+		if (order) {
+			return this.validateSort(order, columns);
+		}
+
+		return true;
+	}
+
+	public validateSort(order: any, columns: string[]): boolean {
+		if (typeof order === "string") {
+			if (!columns.includes(order)) {
+				return false;
+			}
+		}
+
+		if (typeof order === "object") {
+			if (Object.keys(order).length !== 2) {
+				return false;
+			}
+
+			if (!("dir" in order) || !("keys" in order)) {
+				return false;
+			}
+
+			const dir = order.dir;
+			const sortKeys = order.keys;
+
+			if (!(dir === "UP" || dir === "DOWN")) {
+				return false;
+			}
+
+			if (Array.isArray(sortKeys)) {
+				return sortKeys.every((key) => {
+					return columns.includes(key);
+				});
+			}
+		}
+
+		return false;
 	}
 
 	public validateListFilter(keyVal: any): boolean {
@@ -215,12 +336,12 @@ export class QueryProcessor {
 			case "GT":
 			case "LT":
 			case "EQ":
-				if (typeof keyVal !== "number" || this.validKeys[checkedKey.queryKey] !== "n") {
+				if (typeof keyVal !== "number" || this.validKeysSections[checkedKey.queryKey] !== "n") {
 					return false;
 				}
 				break;
 			case "IS":
-				if (typeof keyVal !== "string" || this.validKeys[checkedKey.queryKey] !== "s") {
+				if (typeof keyVal !== "string" || this.validKeysSections[checkedKey.queryKey] !== "s") {
 					return false;
 				}
 				break;
@@ -231,8 +352,8 @@ export class QueryProcessor {
 
 	public isValidKey(key: string): any {
 		const dashIdx = key.indexOf("_");
-		const datasetId = key.substring(0, dashIdx);
-		const queryKey = key.substring(dashIdx + 1);
+		const datasetId = key.slice(0, dashIdx);
+		const queryKey = key.slice(dashIdx + 1);
 
 		let isValid = true;
 		const sections = this.sections;
@@ -240,14 +361,21 @@ export class QueryProcessor {
 			return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
 		}
 
-		if (sections.indexOf(datasetId) >= 0 && this.seenDatasets.indexOf(datasetId) === -1) {
+		if (datasetId in this.sections && this.seenDatasets.indexOf(datasetId) === -1) {
 			this.seenDatasets.push(datasetId);
 			if (this.seenDatasets.length > 1) {
 				isValid = false;
 			}
 		}
 
-		if (!(queryKey in this.validKeys) || dashIdx === -1 || !(sections.indexOf(datasetId) >= 0)) {
+		let looking = {};
+		if (this.sections[datasetId] === "sections") {
+			looking = this.validKeysSections;
+		} else {
+			looking = this.validKeysRooms;
+		}
+
+		if (!(queryKey in looking) || dashIdx === -1 || !(datasetId in this.sections)) {
 			isValid = false;
 		}
 
@@ -319,11 +447,11 @@ export class QueryProcessor {
 		const wcLeft = keyVal[0];
 		const wcRight = keyVal[keyVal.length - 1];
 		if (wcLeft === "*" && wcRight === "*") {
-			return sectionVal.includes(keyVal.substring(1, keyVal.length - 1));
+			return sectionVal.includes(keyVal.slice(1, keyVal.length - 1));
 		} else if (wcLeft === "*") {
-			return sectionVal.endsWith(keyVal.substring(1));
+			return sectionVal.endsWith(keyVal.slice(1));
 		} else if (wcRight === "*") {
-			return sectionVal.startsWith(keyVal.substring(0, keyVal.length - 1));
+			return sectionVal.startsWith(keyVal.slice(0, keyVal.length - 1));
 		}
 
 		return sectionVal === keyVal;

@@ -64,12 +64,16 @@ export default class InsightFacade implements IInsightFacade {
 		const currDataset: DataSetProcessor = new DataSetProcessor();
 
 		try {
-			await currDataset.setSections(content);
+			if (kind === InsightDatasetKind.Sections) {
+				await currDataset.setSections(content);
+			} else if (kind === InsightDatasetKind.Rooms) {
+				await currDataset.setRooms(content);
+			}
 		} catch (_error) {
 			throw new InsightError("content was not readable");
 		}
 
-		await currDataset.writeToFile(id);
+		await currDataset.writeToFile(id, kind);
 
 		if (currDataset.sections.length === 0) {
 			throw new InsightError("No valid sections found");
