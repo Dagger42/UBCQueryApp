@@ -75,7 +75,7 @@ export default class InsightFacade implements IInsightFacade {
 
 		await currDataset.writeToFile(id, kind);
 
-		if (currDataset.sections.length === 0) {
+		if (currDataset.sections.length === 0 && currDataset.rooms.length === 0) {
 			throw new InsightError("No valid sections found");
 		}
 		return this.getIdList();

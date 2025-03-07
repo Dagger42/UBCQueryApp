@@ -75,44 +75,26 @@ export class QueryGroup {
 
 		const applyTokenKey = Object.keys(applyTokenObj)[0];
 		const targetKey = applyTokenObj[applyTokenKey];
-		switch (applyTokenKey) {
-			case "MAX":
-			case "MIN":
-			case "SUM":
-			case "AVG":
-				// TODO : Make sure to add keyType to keyValidatorFunc
-				const { queryKey, isValid, keyType, datasetId } = keyValidatorFunc(targetKey);
-				if (!isValid || keyType !== "n" || datasetId !== this.dataset) {
-					return false;
-				}
-
-				this.anyKeyToOperation[anyKey] = applyTokenKey;
-				this.anyKeyToQueryKey[anyKey] = queryKey;
-				if (this.keyToAnyKey[queryKey] === undefined) {
-					this.keyToAnyKey[queryKey] = [];
-				}
-
-				this.keyToAnyKey[queryKey].push(anyKey);
-				break;
-			case "COUNT":
-				// TODO : implement this
-				const struct = keyValidatorFunc(targetKey);
-				if (!struct.isValid || struct.datasetId !== this.dataset) {
-					return false;
-				}
-
-				this.anyKeyToOperation[anyKey] = applyTokenKey;
-				this.anyKeyToQueryKey[anyKey] = struct.queryKey;
-				if (this.keyToAnyKey[struct.queryKey] === undefined) {
-					this.keyToAnyKey[struct.queryKey] = [];
-				}
-
-				this.keyToAnyKey[struct.queryKey].push(anyKey);
-
-				break;
-			default:
+		const { queryKey, isValid, keyType, datasetId } = keyValidatorFunc(targetKey);
+		if (applyTokenKey === "AVG" || applyTokenKey === "AVG" || applyTokenKey === "AVG" || applyTokenKey === "AVG") {
+			if (!isValid || keyType !== "n" || datasetId !== this.dataset) {
 				return false;
+			}
+		} else if (applyTokenKey === "COUNT") {
+			if (!isValid || datasetId !== this.dataset) {
+				return false;
+			}
+		} else {
+			return false;
 		}
+
+		this.anyKeyToOperation[anyKey] = applyTokenKey;
+		this.anyKeyToQueryKey[anyKey] = queryKey;
+		if (this.keyToAnyKey[queryKey] === undefined) {
+			this.keyToAnyKey[queryKey] = [];
+		}
+
+		this.keyToAnyKey[queryKey].push(anyKey);
 
 		return true;
 	}
@@ -121,9 +103,9 @@ export class QueryGroup {
 		let matchingGroup = null;
 		for (const group of this.groups) {
 			let allEqual = true;
-			for (const groupKey in group.keySet) {
-				const queryKey = groupKey.slice(groupKey.indexOf("_"));
-				if (group.keySet[groupKey] !== entry[queryKey]) {
+			for (const groupKey of this.groupKeys) {
+				const queryKey = groupKey.slice(groupKey.indexOf("_") + 1);
+				if (group[groupKey] !== entry[queryKey]) {
 					allEqual = false;
 					break;
 				}
@@ -145,16 +127,16 @@ export class QueryGroup {
 	}
 
 	private makeGroup(entry: any): any {
-		const newGroup: any = { keySet: {} };
+		const newGroup: any = {};
 		this.groupKeys.forEach((key) => {
-			const queryKey = key.slice(key.indexOf("_"));
-			newGroup.keySet[key] = entry[queryKey];
+			const queryKey = key.slice(key.indexOf("_") + 1);
+			newGroup[key] = entry[queryKey];
 		});
 
 		for (const applyKey in this.anyKeyToOperation) {
 			const queryKey = this.anyKeyToQueryKey[applyKey];
-			if (this.groupKeys.includes(queryKey)) {
-				const actual = queryKey.slice(queryKey.indexOf("_"));
+			if (this.groupKeys.includes(this.dataset + "_" + queryKey)) {
+				const actual = queryKey.slice(queryKey.indexOf("_") + 1);
 				const op = this.anyKeyToOperation[applyKey];
 				if (op === "COUNT") {
 					newGroup[applyKey] = 1;
@@ -181,7 +163,7 @@ export class QueryGroup {
 
 	private updateGroup(group: any, entry: any, keyToAnyKeyElement: string[]): void {
 		group.numRows++;
-		keyToAnyKeyElement.forEach((anyKey) => {
+		for (const anyKey of keyToAnyKeyElement) {
 			const operation = this.anyKeyToOperation[anyKey];
 			const queryKey = this.anyKeyToQueryKey[anyKey];
 			if (this.groupKeys.includes(this.anyKeyToQueryKey[this.dataset + "_" + queryKey])) {
@@ -196,7 +178,7 @@ export class QueryGroup {
 					group[anyKey] = Math.min(group[anyKey], entry[queryKey]);
 					break;
 				case "AVG":
-					group[anyKey].add(entry[queryKey]);
+					group[anyKey] = group[anyKey].add(new Decimal(entry[queryKey]));
 					break;
 				case "SUM":
 					group[anyKey] += entry[queryKey];
@@ -206,18 +188,14 @@ export class QueryGroup {
 						group[anyKey].add(entry[queryKey]);
 					}
 			}
-		});
+		}
 	}
 
 	public getAllSelectableKeys(): string[] {
 		const groupKeys = [...this.groupKeys];
-		groupKeys.push(...Object.keys(this.keyToAnyKey));
+		groupKeys.push(...Object.keys(this.anyKeyToOperation));
 
 		return groupKeys;
-	}
-
-	public getGroupKeys(): string[] {
-		return this.groupKeys;
 	}
 
 	private checkValidObj(obj: any): boolean {
@@ -225,19 +203,15 @@ export class QueryGroup {
 			return false;
 		}
 
-		if (Object.keys(obj).length !== 1) {
-			return false;
-		}
-
-		return false;
+		return Object.keys(obj).length === 1;
 	}
 
 	public getResults(columns: string[], insightResults: InsightResult[]): void {
 		for (const group of this.groups) {
+			const result: InsightResult = {};
 			columns.forEach((key) => {
-				const result: InsightResult = {};
 				if (this.anyKeyToOperation[key] === "AVG") {
-					if (this.groupKeys.includes(this.anyKeyToQueryKey[key])) {
+					if (this.groupKeys.includes(this.dataset + "_" + this.anyKeyToQueryKey[key])) {
 						result[key] = Number(group[key]);
 					} else {
 						const avg = group[key].toNumber() / group.numRows;
@@ -245,12 +219,14 @@ export class QueryGroup {
 					}
 				} else if (this.anyKeyToOperation[key] === "SUM") {
 					result[key] = group[key].toFixed(2);
+				} else if (this.anyKeyToOperation[key] === "COUNT") {
+					result[key] = group[key].size;
 				} else {
 					result[key] = group[key];
 				}
-
-				insightResults.push(result);
 			});
+
+			insightResults.push(result);
 		}
 	}
 }

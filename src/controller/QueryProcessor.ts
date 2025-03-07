@@ -1,21 +1,14 @@
 import { InsightError, InsightResult, ResultTooLargeError } from "./IInsightFacade";
+import {
+	sortResultsByProperty,
+	sortResultsWithTies,
+	validateSort,
+	getDatasetsWithTypes,
+	validateTopLevel,
+} from "./Helpers";
+import { Query, Options, validateColumns } from "./Helpers";
 import fs from "fs-extra";
 import { QueryGroup } from "./QueryGroup";
-
-export interface Filter {
-	[key: string]: string | number | Filter[] | Filter;
-}
-
-export interface Options {
-	COLUMNS: string[];
-	ORDER?: string;
-}
-
-export interface Query {
-	TRANSFORMATIONS?: any;
-	WHERE: Filter;
-	OPTIONS: Options;
-}
 
 export class QueryProcessor {
 	private validKeysSections: Record<string, string> = {
@@ -51,8 +44,7 @@ export class QueryProcessor {
 
 	public async performQuery(input: any, sections: string[]): Promise<InsightResult[]> {
 		this.seenDatasets = [];
-		//this.sections = sections;
-		await this.getDatasetsWithTypes(sections);
+		await getDatasetsWithTypes(sections, this.sections);
 		this.queryGroup = new QueryGroup();
 
 		if (!this.validateQuery(input)) {
@@ -61,20 +53,20 @@ export class QueryProcessor {
 
 		const queryingDataset = this.seenDatasets[0];
 		this.seenDatasets = [];
-		const columns = input.OPTIONS.COLUMNS;
-		const order = input.OPTIONS.ORDER;
+		const { COLUMNS, ORDER } = input.OPTIONS;
 
 		const insightResults: InsightResult[] = [];
+		const allEntries = [];
 
 		const jsonData = await fs.readJson("./data/" + queryingDataset + ".json");
 		for (const section of jsonData.sections) {
 			const temp = section;
 			if (this.applyFilters(section, input.WHERE)) {
 				if ("TRANSFORMATIONS" in input) {
-					this.queryGroup.addEntry(section);
+					allEntries.push(section);
 				} else {
 					const result: InsightResult = {};
-					columns.forEach((key: string) => {
+					COLUMNS.forEach((key: string) => {
 						result[key] = temp[this.isValidKey(key).queryKey];
 					});
 
@@ -83,66 +75,31 @@ export class QueryProcessor {
 			}
 		}
 
-		if ("TRANSFORMATIONS" in input) {
-			this.queryGroup.getResults(columns, insightResults);
-		}
-
+		this.constructGroups(input, allEntries, COLUMNS, insightResults);
 		const queryMaxResults = 5000;
 		if (insightResults.length > queryMaxResults) {
 			throw new ResultTooLargeError();
 		}
 
-		if (typeof order === "string") {
-			this.sortResultsByProperty(insightResults, order);
-		} else {
-			this.sortResultsWithTies(insightResults, order.keys, order.dir);
-		}
-
+		this.sortResultsByOrderKey(ORDER, insightResults);
 		return insightResults;
 	}
 
-	public sortResultsByProperty(results: any[], property: string): void {
-		results.sort((a, b) => {
-			const p1 = a[property];
-			const p2 = b[property];
-
-			if (typeof p1 === "string") {
-				if (p1 === p2) {
-					return 0;
-				}
-
-				return p1 < p2 ? -1 : 1;
+	public constructGroups(input: any, allEntries: any[], columns: any, insightResults: InsightResult[]): void {
+		if ("TRANSFORMATIONS" in input) {
+			for (const e of allEntries) {
+				this.queryGroup?.addEntry(e);
 			}
 
-			return p1 - p2;
-		});
-	}
-
-	public sortResultsWithTies(results: any[], keys: string[], dir: string): void {
-		results.sort((a: any, b: any) => {
-			for (const k of keys) {
-				const p1: any = a[k];
-				const p2: any = b[k];
-
-				if (p1 < p2) {
-					return dir === "UP" ? -1 : 1; // Ascending for 'UP', Descending otherwise
-				} else if (p1 > p2) {
-					return dir === "UP" ? 1 : -1;
-				}
-			}
-			return 0; // If all keys are equal, maintain order
-		});
-	}
-
-	private async getDatasetsWithTypes(ids: string[]): Promise<void> {
-		const promises = [];
-		for (const id of ids) {
-			promises.push(fs.readJson("./data/" + id + ".json"));
+			this.queryGroup?.getResults(columns, insightResults);
 		}
+	}
 
-		const jsons = await Promise.all(promises);
-		for (const json of jsons) {
-			this.sections[json.insightResult.id] = json.insightResult.kind;
+	public sortResultsByOrderKey(order: any, insightResults: any[]): void {
+		if (typeof order === "string") {
+			sortResultsByProperty(insightResults, order);
+		} else if (typeof order === "object") {
+			sortResultsWithTies(insightResults, order.keys, order.dir);
 		}
 	}
 
@@ -151,20 +108,8 @@ export class QueryProcessor {
 			return false;
 		}
 
-		const requiredKeys = ["BODY", "OPTIONS"];
-		const optionalKey = "TRANSFORMATIONS";
-		for (const key of requiredKeys) {
-			if (!(key in input)) {
-				return false;
-			}
-		}
-
-		// Check if it contains only allowed keys
-		const allowedKeys = new Set([...requiredKeys, optionalKey]);
-		for (const key of Object.keys(input)) {
-			if (!allowedKeys.has(key)) {
-				return false;
-			}
+		if (!validateTopLevel(input)) {
+			return false;
 		}
 
 		const where = input.WHERE;
@@ -249,55 +194,15 @@ export class QueryProcessor {
 			return false;
 		}
 
-		const selectableKeys = this.queryGroup?.getAllSelectableKeys();
-		for (const key of columns) {
-			if (hasTransforms && selectableKeys?.indexOf(key) === -1) {
-				return false;
-			}
-
-			if (!this.isValidKey(key).isValid) {
-				return false;
-			}
+		if (!validateColumns(this.queryGroup?.getAllSelectableKeys(), this.isValidKey, columns, hasTransforms)) {
+			return false;
 		}
 
 		if (order) {
-			return this.validateSort(order, columns);
+			return validateSort(order, columns);
 		}
 
 		return true;
-	}
-
-	public validateSort(order: any, columns: string[]): boolean {
-		if (typeof order === "string") {
-			if (!columns.includes(order)) {
-				return false;
-			}
-		}
-
-		if (typeof order === "object") {
-			if (Object.keys(order).length !== 2) {
-				return false;
-			}
-
-			if (!("dir" in order) || !("keys" in order)) {
-				return false;
-			}
-
-			const dir = order.dir;
-			const sortKeys = order.keys;
-
-			if (!(dir === "UP" || dir === "DOWN")) {
-				return false;
-			}
-
-			if (Array.isArray(sortKeys)) {
-				return sortKeys.every((key) => {
-					return columns.includes(key);
-				});
-			}
-		}
-
-		return false;
 	}
 
 	public validateListFilter(keyVal: any): boolean {
@@ -319,8 +224,8 @@ export class QueryProcessor {
 	}
 
 	public validateQueryPair(currKey: string, keyVal: any, filterStr: string): boolean {
-		const checkedKey = this.isValidKey(currKey);
-		if (!checkedKey.isValid) {
+		const { keyType, isValid } = this.isValidKey(currKey);
+		if (!isValid) {
 			return false;
 		}
 
@@ -336,12 +241,12 @@ export class QueryProcessor {
 			case "GT":
 			case "LT":
 			case "EQ":
-				if (typeof keyVal !== "number" || this.validKeysSections[checkedKey.queryKey] !== "n") {
+				if (typeof keyVal !== "number" || keyType !== "n") {
 					return false;
 				}
 				break;
 			case "IS":
-				if (typeof keyVal !== "string" || this.validKeysSections[checkedKey.queryKey] !== "s") {
+				if (typeof keyVal !== "string" || keyType !== "s") {
 					return false;
 				}
 				break;
@@ -350,16 +255,12 @@ export class QueryProcessor {
 		return true;
 	}
 
-	public isValidKey(key: string): any {
+	public isValidKey = (key: string): any => {
 		const dashIdx = key.indexOf("_");
 		const datasetId = key.slice(0, dashIdx);
 		const queryKey = key.slice(dashIdx + 1);
 
 		let isValid = true;
-		const sections = this.sections;
-		if (!sections) {
-			return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
-		}
 
 		if (datasetId in this.sections && this.seenDatasets.indexOf(datasetId) === -1) {
 			this.seenDatasets.push(datasetId);
@@ -368,19 +269,23 @@ export class QueryProcessor {
 			}
 		}
 
-		let looking = {};
+		if (dashIdx === -1 || !(datasetId in this.sections)) {
+			isValid = false;
+		}
+
+		let looking: any;
 		if (this.sections[datasetId] === "sections") {
 			looking = this.validKeysSections;
 		} else {
 			looking = this.validKeysRooms;
 		}
 
-		if (!(queryKey in looking) || dashIdx === -1 || !(datasetId in this.sections)) {
-			isValid = false;
+		if (!(queryKey in looking)) {
+			return false;
 		}
 
-		return { queryKey: queryKey, datasetId: datasetId, isValid: isValid };
-	}
+		return { queryKey: queryKey, datasetId: datasetId, isValid: isValid, keyType: looking[queryKey] };
+	};
 
 	private applyFilters(section: any, query: any): boolean {
 		const filterStr = Object.keys(query)[0];
