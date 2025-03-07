@@ -227,10 +227,8 @@ export default class DataSetProcessor {
 			}
 		}
 
-
 		currRoom.name = `${currRoom.shortname}_${currRoom.number}`;
 		return currRoom;
-
 	}
 
 	private fetchBuildingFiles(table: any): Set<any> {
