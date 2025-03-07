@@ -150,6 +150,8 @@ export class QueryGroup {
 				newGroup[applyKey] = new Decimal(0);
 			} else if (this.anyKeyToOperation[applyKey] === "COUNT") {
 				newGroup[applyKey] = new Set<String>();
+			} else if (this.anyKeyToOperation[applyKey] === "MIN") {
+				newGroup[applyKey] = Infinity;
 			} else {
 				newGroup[applyKey] = 0;
 			}
