@@ -26,10 +26,12 @@ describe("InsightFacade", function () {
 
 	// Declare datasets used in tests. You should add more datasets like this!
 	let sections: string;
+	let rooms: string;
 
 	before(async function () {
 		// This block runs once and loads the datasets.
 		sections = await getContentFromArchives("pair.zip");
+		rooms = await getContentFromArchives("campus.zip");
 		// Just in case there is anything hanging around from a previous run of the test suite
 		await clearDisk();
 	});
@@ -37,6 +39,7 @@ describe("InsightFacade", function () {
 	describe("AddDataset", function () {
 		before(async function () {
 			sections = await getContentFromArchives("one_section_valid.zip");
+			rooms = await getContentFromArchives("campus.zip");
 		});
 		beforeEach(async function () {
 			await clearDisk();
@@ -64,8 +67,10 @@ describe("InsightFacade", function () {
 		});
 
 		it("ok with non empty dataset id", async function () {
-			const result = await facade.addDataset("ubc", sections, InsightDatasetKind.Sections);
-			expect(result).to.have.members(["ubc"]);
+			//const result = await facade.addDataset("ubc", sections, InsightDatasetKind.Sections);
+			const resultRoom = await facade.addDataset("ubcrooms", rooms, InsightDatasetKind.Rooms);
+			//expect(result).to.have.members(["ubc"]);
+			expect(resultRoom).to.have.members(["ubcrooms"]);
 		});
 
 		it("ok with character+whitespace dataset id", async function () {
