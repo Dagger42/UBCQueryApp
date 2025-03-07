@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { InsightDataset, InsightDatasetKind, InsightError } from "./IInsightFacade";
 import fs from "fs-extra";
 import * as parse5 from "parse5";
+import http from "http";
 
 interface GeoResponse {
 	lat?: number;
@@ -123,7 +124,7 @@ export default class DataSetProcessor {
 		};
 
 		const jsonData = { sections: kind === "rooms" ? this.rooms : this.sections, insightResult: currInsightDataset };
-		await fs.writeJson("data/" + id + "_" + kind + ".json", jsonData, { spaces: 2 });
+		await fs.writeJson("data/" + id + ".json", jsonData, { spaces: 2 });
 	}
 
 	//functioned called for parsing HTML and setting rooms Data Structure
@@ -135,14 +136,14 @@ export default class DataSetProcessor {
 		if (!filePaths.includes("index.htm")) {
 			throw new InsightError("Must contain index.htm");
 		}
-
+		/*
 		if (
 			filePaths.some(
-				(filePath) => !filePath.startsWith("campus/discover/buildings-and-classrooms/") || filePath !== "index.htm"
+				(filePath) => !filePath.endsWith("/") && !filePath.startsWith("campus/discover/buildings-and-classrooms") || filePath !== "index.htm"
 			)
 		) {
 			throw new InsightError("Does not follow correct zip structure of rooms dataset");
-		}
+		}*/
 		const indexHtmlFile = zippedData.files["index.htm"];
 		const indexHtmlContent = await indexHtmlFile.async("text");
 		const parsedIndexHtml = parse5.parse(indexHtmlContent);
@@ -196,29 +197,28 @@ export default class DataSetProcessor {
 							lon: buildingInfo.lon,
 						};
 						for (const cell of row.childNodes) {
-							if (cell.nodeName === "td" && cell.attrs?.length > 0 && cell.attrs[0].name === "class") {
-								const cellAttr = cell.attrs[0].value;
+							if (cell.nodeName === "td" && cell.attrs?.length > 0 && this.getAttribute(cell, "class")) {
+								const cellAttr = this.getAttribute(cell, "class");
 								if (cellAttr === "views-field views-field-field-room-capacity") {
-									const textNode = cell.childNodes[0];
+									const textNode = this.findChildTag(cell, "#text");
 									if (textNode) {
 										currRoom.seats = Number(textNode.value);
 									}
 								} else if (cellAttr === "views-field views-field-field-room-furniture") {
-									const textNode = cell.childNodes[0];
+									const textNode = this.findChildTag(cell, "#text");
 									if (textNode) {
 										currRoom.furniture = textNode.value.trim();
 									}
 								} else if (cellAttr === "views-field views-field-field-room-type") {
-									const textNode = cell.childNodes[0];
+									const textNode = this.findChildTag(cell, "#text");
 									if (textNode) {
 										currRoom.type = textNode.value.trim();
 									}
 								} else if (cellAttr === "views-field views-field-field-room-number") {
-									const linkNode = cell.childNodes[0];
-									if (linkNode && linkNode.nodeName === "a") {
-										currRoom.href = linkNode.attrs[0].value;
-									}
-									const textNode = linkNode.childNodes[0];
+									const linkNode = this.findChildTag(cell, "a");
+									currRoom.href = this.getAttribute(linkNode, "href");
+
+									const textNode = this.findChildTag(linkNode, "#text");
 									if (textNode) {
 										currRoom.number = textNode.value.trim();
 									}
@@ -243,7 +243,7 @@ export default class DataSetProcessor {
 				return node;
 			}
 		}
-		if (node.childNodes.length !== 0) {
+		if (node.childNodes?.length) {
 			for (const child of node.childNodes) {
 				const result = this.findValidTable(child);
 				if (result) {
@@ -255,23 +255,18 @@ export default class DataSetProcessor {
 	}
 
 	//check if a given table has a valid td within its struct
+
 	public tableContainsValidtd(node: any): boolean {
-		if (!node) {
-			return false;
-		}
-		if (node.childNodes.length === 0) {
-			return false;
-		}
+		if (!node?.childNodes) return false;
+
 		for (const child of node.childNodes) {
-			if (child.nodeName === "td") {
-				if (this.hasRequiredClass(child)) {
-					return true;
-				}
-			}
-			if (this.tableContainsValidtd(child)) {
+			if (child.nodeName === "td" && this.hasRequiredClass(child)) {
+				return true;
+			} else if (this.tableContainsValidtd(child)) {
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -283,11 +278,7 @@ export default class DataSetProcessor {
 		for (const attr of node.attrs) {
 			if (attr.name === "class") {
 				const classValue = attr.value;
-				if (
-					classValue.includes("views-field") ||
-					classValue.includes("views-field-title") ||
-					classValue.includes("views-field-field-building-address")
-				) {
+				if (classValue.includes("views-field")) {
 					return true;
 				}
 			}
@@ -310,23 +301,23 @@ export default class DataSetProcessor {
 							lon: 0,
 						};
 						for (const cell of row.childNodes) {
-							if (cell.nodeName === "td" && cell.attrs?.length > 0 && cell.attrs[0].name === "class") {
-								const classAttr = cell.attrs[0].value;
+							if (cell.nodeName === "td" && cell.attrs?.length > 0 && this.getAttribute(cell, "class")) {
+								const classAttr = this.getAttribute(cell, "class");
 								if (classAttr === "views-field views-field-title") {
 									// Find the <a> tag inside the <td> and extract text
-									const link = cell.childNodes[0];
+									const link = this.findChildTag(cell, "a");
 									if (link && link.attrs?.length > 0) {
-										buildingInfo.href = link.attrs[0].value;
+										buildingInfo.href = this.getAttribute(link, "href");
 									}
-									const textNode = link.childNodes[0];
+									const textNode = this.findChildTag(link, "#text");
 									buildingInfo.fullname = textNode.value;
 								} else if (classAttr === "views-field views-field-field-building-address") {
-									const textNode = cell.childNodes[0];
+									const textNode = this.findChildTag(cell, "#text");
 									if (textNode) {
 										buildingInfo.address = textNode.value.trim();
 									}
 								} else if (classAttr === "views-field views-field-field-building-code") {
-									const textNode = cell.childNodes[0];
+									const textNode = this.findChildTag(cell, "#text");
 									if (textNode) {
 										buildingInfo.shortname = textNode.value.trim();
 									}
@@ -344,14 +335,41 @@ export default class DataSetProcessor {
 		}
 		return buildingFiles;
 	}
-	public async fetchGeolocation(address: string): Promise<GeoResponse | null> {
-		const encodedAddress = encodeURIComponent(address);
-		const url = "http://cs310.students.cs.ubc.ca:11316/api/v1/project_team272/" + encodedAddress;
-		const response = await fetch(url);
-		if (!response.ok) {
-			return null;
-		}
-		const data: GeoResponse = await response.json();
-		return data as GeoResponse;
+
+	public getAttribute(node: parse5.DefaultTreeAdapterMap["element"], attrName: string): string {
+		if (!Array.isArray(node.attrs)) return "";
+		return node.attrs.find((attr) => attr.name === attrName)?.value || "";
+	}
+
+	public findChildTag(parent: parse5.DefaultTreeAdapterMap["element"], tagName: string): any | undefined {
+		return parent.childNodes.find((node) => node.nodeName === tagName);
+	}
+
+	public async fetchGeolocation(address: string): Promise<GeoResponse> {
+		//generated by GPT
+		return new Promise((resolve, reject) => {
+			const encodedAddress = encodeURIComponent(address);
+			const url = `http://cs310.students.cs.ubc.ca:11316/api/v1/project_team272/${encodedAddress}`;
+
+			http
+				.get(url, (res) => {
+					let data = "";
+					res.on("data", (chunk) => {
+						data += chunk;
+					});
+
+					res.on("end", () => {
+						try {
+							const parsedData = JSON.parse(data) as GeoResponse;
+							resolve(parsedData);
+						} catch (error) {
+							reject(new Error("Failed to parse response JSON"));
+						}
+					});
+				})
+				.on("error", (error) => {
+					reject(new Error(`HTTP Request Failed: ${error.message}`));
+				});
+		});
 	}
 }
