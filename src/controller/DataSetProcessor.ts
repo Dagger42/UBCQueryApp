@@ -3,13 +3,7 @@ import JSZip from "jszip";
 import { InsightDataset, InsightDatasetKind, InsightError } from "./IInsightFacade";
 import fs from "fs-extra";
 import * as parse5 from "parse5";
-import http from "http";
-
-interface GeoResponse {
-	lat?: number;
-	lon?: number;
-	error?: string;
-}
+import { findValidTable, getAttribute, findChildTag, fetchGeolocation } from "./HTMLTreeTraversalMethods";
 
 export default class DataSetProcessor {
 	public sections: Section[];
@@ -61,7 +55,6 @@ export default class DataSetProcessor {
 		} catch (_err) {
 			return;
 		}
-
 		const requiredFields: string[] = [
 			"Course",
 			"Title",
@@ -75,15 +68,12 @@ export default class DataSetProcessor {
 			"Fail",
 			"Audit",
 		];
-
 		if (!("result" in jsonData)) {
 			return;
 		}
-
 		if (!Array.isArray(jsonData.result)) {
 			return;
 		}
-
 		const validSections = jsonData.result.filter((section: any) =>
 			requiredFields.every((field) => section[field] !== undefined && section[field] !== null)
 		);
@@ -127,206 +117,133 @@ export default class DataSetProcessor {
 		await fs.writeJson("data/" + id + ".json", jsonData, { spaces: 2 });
 	}
 
-	//functioned called for parsing HTML and setting rooms Data Structure
+	public validateFilePathsRooms(filePaths: string[]): boolean {
+		if (!filePaths.includes("index.htm")) {
+			return false;
+		}
+		const invalidFiles = filePaths.filter(
+			(filePath) =>
+				!filePath.endsWith("/") &&
+				filePath !== "index.htm" &&
+				!filePath.startsWith("campus/discover/buildings-and-classrooms/")
+		);
+		return invalidFiles.length > 0;
+	}
+
+	//function called for parsing HTML and setting rooms Data Structure
 	public async setRooms(content: string): Promise<void> {
 		const zip = new JSZip();
 		const binaryData = Buffer.from(content, "base64");
 		const zippedData = await zip.loadAsync(binaryData);
 		const filePaths = Object.keys(zippedData.files);
-		if (!filePaths.includes("index.htm")) {
-			throw new InsightError("Must contain index.htm");
+		if (this.validateFilePathsRooms(filePaths)) {
+			throw new InsightError("INVALID ZIP FILE");
 		}
-		/*
-		if (
-			filePaths.some(
-				(filePath) => !filePath.endsWith("/") && !filePath.startsWith("campus/discover/buildings-and-classrooms") || filePath !== "index.htm"
-			)
-		) {
-			throw new InsightError("Does not follow correct zip structure of rooms dataset");
-		}*/
 		const indexHtmlFile = zippedData.files["index.htm"];
 		const indexHtmlContent = await indexHtmlFile.async("text");
 		const parsedIndexHtml = parse5.parse(indexHtmlContent);
-		//fetch the set of tables
-		//then find the valid table
-		//after finding valid table fetch all
-		const validTable = this.findValidTable(parsedIndexHtml);
+		const validTable = findValidTable(parsedIndexHtml);
 		if (validTable === undefined) {
 			throw new InsightError("No valid index.html table found.");
 		}
 		// handle API call remove all buildings that cannot retrieve address
+		const setOfBuildingFilesUpdate1 = await this.fetchBuildingsWithGeolocation(validTable);
+		const validBuildings = Array.from(setOfBuildingFilesUpdate1).filter((building) => building !== null);
+		const buildingPromises = validBuildings.map(async (buildingInfo) => {
+			if (filePaths.some((filePath) => filePath.startsWith(buildingInfo.href.substring(2)))) {
+				const buildingFileHtml = zippedData.files[buildingInfo.href.substring(2)];
+				const buildingFileHtmlContent = await buildingFileHtml.async("text");
+				const parsedBuildingFileHtml = parse5.parse(buildingFileHtmlContent);
+
+				// Find and validate the table
+				const validTableRooms = findValidTable(parsedBuildingFileHtml);
+				if (validTableRooms) {
+					return this.fetchRooms(validTableRooms, buildingInfo);
+				}
+			}
+			return null; // Return null for invalid buildings
+		});
+		await Promise.all(buildingPromises);
+	}
+
+	private async fetchBuildingsWithGeolocation(validTable: any): Promise<any[]> {
 		const setOfBuildingFiles = this.fetchBuildingFiles(validTable);
 		const updatedBuildingFilesSet = Array.from(setOfBuildingFiles).map(async (buildingInfo) => {
-			const geoData = await this.fetchGeolocation(buildingInfo.address);
-			if (geoData === null) {
-				return null;
-			}
-			if (geoData.error) {
+			const geoData = await fetchGeolocation(buildingInfo.address);
+			if (!geoData || geoData.error) {
 				return null;
 			}
 			buildingInfo.lat = geoData.lat;
 			buildingInfo.lon = geoData.lon;
 			return buildingInfo;
 		});
-		const setOfBuildingFilesUpdate1 = await Promise.all(updatedBuildingFilesSet);
-		const setOfBuildingFilesUpdate2 = new Set(setOfBuildingFilesUpdate1.filter((building) => building !== null));
-		// need to now loop through the map and then check whether the link is valid, pop all that are invalid
-		for (const buildingInfo of setOfBuildingFilesUpdate2) {
-			if (filePaths.some((filePath) => filePath.startsWith(buildingInfo.href.substring(2)))) {
-				const buildingFileHtml = zippedData.files[buildingInfo.href.substring(2)];
-				const buildingFileHtmlContent = await buildingFileHtml.async("text");
-				const parsedBuildingFileHtml = parse5.parse(buildingFileHtmlContent);
-				// need to validate and find table
-				if (this.findValidTable(parsedBuildingFileHtml)) {
-					this.fetchRooms(this.findValidTable(parsedBuildingFileHtml), buildingInfo);
-				}
-			}
-		}
+
+		return await Promise.all(updatedBuildingFilesSet);
 	}
 
-	public fetchRooms(table: any, buildingInfo: any) {
+	public fetchRooms(table: any, buildingInfo: any): void {
 		for (const child of table.childNodes) {
 			if (child.nodeName === "tbody") {
 				for (const row of child.childNodes) {
 					if (row.nodeName === "tr") {
-						const currRoom: Rooms = {
-							fullname: buildingInfo.fullname,
-							shortname: buildingInfo.shortname,
-							address: buildingInfo.address,
-							lat: buildingInfo.lat,
-							lon: buildingInfo.lon,
-						};
-						for (const cell of row.childNodes) {
-							if (cell.nodeName === "td" && cell.attrs?.length > 0 && this.getAttribute(cell, "class")) {
-								const cellAttr = this.getAttribute(cell, "class");
-								if (cellAttr === "views-field views-field-field-room-capacity") {
-									const textNode = this.findChildTag(cell, "#text");
-									if (textNode) {
-										currRoom.seats = Number(textNode.value);
-									}
-								} else if (cellAttr === "views-field views-field-field-room-furniture") {
-									const textNode = this.findChildTag(cell, "#text");
-									if (textNode) {
-										currRoom.furniture = textNode.value.trim();
-									}
-								} else if (cellAttr === "views-field views-field-field-room-type") {
-									const textNode = this.findChildTag(cell, "#text");
-									if (textNode) {
-										currRoom.type = textNode.value.trim();
-									}
-								} else if (cellAttr === "views-field views-field-field-room-number") {
-									const linkNode = this.findChildTag(cell, "a");
-									currRoom.href = this.getAttribute(linkNode, "href");
-
-									const textNode = this.findChildTag(linkNode, "#text");
-									if (textNode) {
-										currRoom.number = textNode.value.trim();
-									}
-								}
-							}
+						const currRoom = this.processRoomRow(row, buildingInfo);
+						if (currRoom) {
+							this.totalRooms++;
+							this.rooms.push(currRoom);
 						}
-						if (currRoom.number && currRoom.href && currRoom.type && currRoom.furniture && currRoom.seats) {
-							currRoom.name = currRoom.shortname + "_" + currRoom.number;
-						}
-						this.totalRooms++;
-						this.rooms.push(currRoom);
 					}
 				}
 			}
 		}
 	}
 
-	// finds the validTable in the html file
-	public findValidTable(node: any): any | null {
-		if (node.nodeName === "table") {
-			if (this.tableContainsValidtd(node)) {
-				return node;
-			}
-		}
-		if (node.childNodes?.length) {
-			for (const child of node.childNodes) {
-				const result = this.findValidTable(child);
-				if (result) {
-					return result;
+	private processRoomRow(row: any, buildingInfo: any): Rooms | null {
+		const currRoom: Rooms = {
+			fullname: buildingInfo.fullname,
+			shortname: buildingInfo.shortname,
+			address: buildingInfo.address,
+			lat: buildingInfo.lat,
+			lon: buildingInfo.lon,
+		};
+
+		for (const cell of row.childNodes) {
+			if (cell.nodeName === "td" && cell.attrs?.length > 0 && getAttribute(cell, "class")) {
+				const cellAttr = getAttribute(cell, "class");
+				if (cellAttr === "views-field views-field-field-room-capacity") {
+					const textNode = findChildTag(cell, "#text");
+					if (textNode) currRoom.seats = Number(textNode.value);
+				} else if (cellAttr === "views-field views-field-field-room-furniture") {
+					const textNode = findChildTag(cell, "#text");
+					if (textNode) currRoom.furniture = textNode.value.trim();
+				} else if (cellAttr === "views-field views-field-field-room-type") {
+					const textNode = findChildTag(cell, "#text");
+					if (textNode) currRoom.type = textNode.value.trim();
+				} else if (cellAttr === "views-field views-field-field-room-number") {
+					const linkNode = findChildTag(cell, "a");
+					currRoom.href = getAttribute(linkNode, "href");
+					const textNode = findChildTag(linkNode, "#text");
+					if (textNode) currRoom.number = textNode.value.trim();
 				}
 			}
 		}
+
+		if (currRoom.number && currRoom.href && currRoom.type && currRoom.furniture && currRoom.seats) {
+			currRoom.name = `${currRoom.shortname}_${currRoom.number}`;
+			return currRoom;
+		}
+
 		return null;
 	}
 
-	//check if a given table has a valid td within its struct
-
-	public tableContainsValidtd(node: any): boolean {
-		if (!node?.childNodes) return false;
-
-		for (const child of node.childNodes) {
-			if (child.nodeName === "td" && this.hasRequiredClass(child)) {
-				return true;
-			} else if (this.tableContainsValidtd(child)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	// check if a td has the required class attributes
-	public hasRequiredClass(node: any): boolean {
-		if (!node.attrs) {
-			return false;
-		}
-		for (const attr of node.attrs) {
-			if (attr.name === "class") {
-				const classValue = attr.value;
-				if (classValue.includes("views-field")) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
 	private fetchBuildingFiles(table: any): Set<any> {
-		const buildingFiles = new Set<any>(); //building shortname : building information]
+		const buildingFiles = new Set<any>();
+
 		for (const child of table.childNodes) {
 			if (child.nodeName === "tbody") {
 				for (const row of child.childNodes) {
 					if (row.nodeName === "tr") {
-						const buildingInfo = {
-							fullname: "",
-							shortname: "",
-							address: "",
-							href: "",
-							lat: 0,
-							lon: 0,
-						};
-						for (const cell of row.childNodes) {
-							if (cell.nodeName === "td" && cell.attrs?.length > 0 && this.getAttribute(cell, "class")) {
-								const classAttr = this.getAttribute(cell, "class");
-								if (classAttr === "views-field views-field-title") {
-									// Find the <a> tag inside the <td> and extract text
-									const link = this.findChildTag(cell, "a");
-									if (link && link.attrs?.length > 0) {
-										buildingInfo.href = this.getAttribute(link, "href");
-									}
-									const textNode = this.findChildTag(link, "#text");
-									buildingInfo.fullname = textNode.value;
-								} else if (classAttr === "views-field views-field-field-building-address") {
-									const textNode = this.findChildTag(cell, "#text");
-									if (textNode) {
-										buildingInfo.address = textNode.value.trim();
-									}
-								} else if (classAttr === "views-field views-field-field-building-code") {
-									const textNode = this.findChildTag(cell, "#text");
-									if (textNode) {
-										buildingInfo.shortname = textNode.value.trim();
-									}
-								}
-							}
-						}
-
-						// If both title and address are found, store them in the Set
-						if (buildingInfo.fullname && buildingInfo.shortname && buildingInfo.address && buildingInfo.href) {
+						const buildingInfo = this.processBuildingRow(row);
+						if (buildingInfo) {
 							buildingFiles.add(buildingInfo);
 						}
 					}
@@ -336,40 +253,48 @@ export default class DataSetProcessor {
 		return buildingFiles;
 	}
 
-	public getAttribute(node: parse5.DefaultTreeAdapterMap["element"], attrName: string): string {
-		if (!Array.isArray(node.attrs)) return "";
-		return node.attrs.find((attr) => attr.name === attrName)?.value || "";
+	private processBuildingRow(row: any): any | null {
+		const buildingInfo = {
+			fullname: "",
+			shortname: "",
+			address: "",
+			href: "",
+			lat: 0,
+			lon: 0,
+		};
+		for (const cell of row.childNodes) {
+			if (cell.nodeName === "td" && cell.attrs?.length > 0) {
+				this.processBuildingCell(cell, buildingInfo);
+			}
+		}
+		return buildingInfo.fullname && buildingInfo.shortname && buildingInfo.address && buildingInfo.href
+			? buildingInfo
+			: null;
 	}
 
-	public findChildTag(parent: parse5.DefaultTreeAdapterMap["element"], tagName: string): any | undefined {
-		return parent.childNodes.find((node) => node.nodeName === tagName);
-	}
+	private processBuildingCell(cell: any, buildingInfo: any): void {
+		const classAttr = getAttribute(cell, "class");
+		if (!classAttr) return;
 
-	public async fetchGeolocation(address: string): Promise<GeoResponse> {
-		//generated by GPT
-		return new Promise((resolve, reject) => {
-			const encodedAddress = encodeURIComponent(address);
-			const url = `http://cs310.students.cs.ubc.ca:11316/api/v1/project_team272/${encodedAddress}`;
-
-			http
-				.get(url, (res) => {
-					let data = "";
-					res.on("data", (chunk) => {
-						data += chunk;
-					});
-
-					res.on("end", () => {
-						try {
-							const parsedData = JSON.parse(data) as GeoResponse;
-							resolve(parsedData);
-						} catch (error) {
-							reject(new Error("Failed to parse response JSON"));
-						}
-					});
-				})
-				.on("error", (error) => {
-					reject(new Error(`HTTP Request Failed: ${error.message}`));
-				});
-		});
+		if (classAttr === "views-field views-field-title") {
+			const link = findChildTag(cell, "a");
+			if (link && link.attrs?.length > 0) {
+				buildingInfo.href = getAttribute(link, "href");
+			}
+			const textNode = findChildTag(link, "#text");
+			if (textNode) {
+				buildingInfo.fullname = textNode.value;
+			}
+		} else if (classAttr === "views-field views-field-field-building-address") {
+			const textNode = findChildTag(cell, "#text");
+			if (textNode) {
+				buildingInfo.address = textNode.value.trim();
+			}
+		} else if (classAttr === "views-field views-field-field-building-code") {
+			const textNode = findChildTag(cell, "#text");
+			if (textNode) {
+				buildingInfo.shortname = textNode.value.trim();
+			}
+		}
 	}
 }

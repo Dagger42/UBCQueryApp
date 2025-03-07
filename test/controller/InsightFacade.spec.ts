@@ -67,10 +67,10 @@ describe("InsightFacade", function () {
 		});
 
 		it("ok with non empty dataset id", async function () {
-			//const result = await facade.addDataset("ubc", sections, InsightDatasetKind.Sections);
+			const result = await facade.addDataset("ubc", sections, InsightDatasetKind.Sections);
 			const resultRoom = await facade.addDataset("ubcrooms", rooms, InsightDatasetKind.Rooms);
-			//expect(result).to.have.members(["ubc"]);
-			expect(resultRoom).to.have.members(["ubcrooms"]);
+			expect(result).to.have.members(["ubc"]);
+			expect(resultRoom).to.have.members(["ubcrooms", "ubc"]);
 		});
 
 		it("ok with character+whitespace dataset id", async function () {
