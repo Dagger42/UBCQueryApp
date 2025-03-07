@@ -274,10 +274,12 @@ describe("InsightFacade", function () {
 			// Add the datasets to InsightFacade once.
 			// Will *fail* if there is a problem reading ANY dataset.
 			sections = await getContentFromArchives("pair.zip");
+			rooms = await getContentFromArchives("campus.zip");
 			const set2 = await getContentFromArchives("one_section_valid.zip");
 			const loadDatasetPromises: Promise<string[]>[] = [
 				facade.addDataset("sections", sections, InsightDatasetKind.Sections),
 				facade.addDataset("set2", set2, InsightDatasetKind.Sections),
+				facade.addDataset("rooms", rooms, InsightDatasetKind.Rooms),
 			];
 
 			try {
@@ -304,6 +306,8 @@ describe("InsightFacade", function () {
 		it("[valid/check_fields.json] test all m and s fields", checkQuery);
 		it("[valid/check_not_and_logic.json] test negation and logic", checkQuery);
 		it("[valid/empty_return.json] test query with no results", checkQuery);
+		it("[valid/rooms_all_valid.json] test query no filter on rooms", checkQuery);
+		it("[valid/rooms_check_tables_seats300.json] test query on tables + seats", checkQuery);
 
 		it("[valid/test_grouping.json]", checkQuery);
 

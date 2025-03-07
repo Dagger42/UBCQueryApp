@@ -76,7 +76,7 @@ export class QueryGroup {
 		const applyTokenKey = Object.keys(applyTokenObj)[0];
 		const targetKey = applyTokenObj[applyTokenKey];
 		const { queryKey, isValid, keyType, datasetId } = keyValidatorFunc(targetKey);
-		if (applyTokenKey === "AVG" || applyTokenKey === "AVG" || applyTokenKey === "AVG" || applyTokenKey === "AVG") {
+		if (applyTokenKey === "AVG" || applyTokenKey === "SUM" || applyTokenKey === "MAX" || applyTokenKey === "MIN") {
 			if (!isValid || keyType !== "n" || datasetId !== this.dataset) {
 				return false;
 			}
@@ -136,12 +136,11 @@ export class QueryGroup {
 		for (const applyKey in this.anyKeyToOperation) {
 			const queryKey = this.anyKeyToQueryKey[applyKey];
 			if (this.groupKeys.includes(this.dataset + "_" + queryKey)) {
-				const actual = queryKey.slice(queryKey.indexOf("_") + 1);
 				const op = this.anyKeyToOperation[applyKey];
 				if (op === "COUNT") {
 					newGroup[applyKey] = 1;
 				} else {
-					newGroup[applyKey] = entry[actual];
+					newGroup[applyKey] = entry[queryKey];
 				}
 
 				continue;
