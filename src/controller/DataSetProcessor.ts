@@ -211,28 +211,26 @@ export default class DataSetProcessor {
 				const cellAttr = getAttribute(cell, "class");
 				if (cellAttr === "views-field views-field-field-room-capacity") {
 					const textNode = findChildTag(cell, "#text");
-					if (textNode) currRoom.seats = Number(textNode.value);
+					currRoom.seats = Number(textNode.value);
 				} else if (cellAttr === "views-field views-field-field-room-furniture") {
 					const textNode = findChildTag(cell, "#text");
-					if (textNode) currRoom.furniture = textNode.value.trim();
+					currRoom.furniture = textNode.value.trim();
 				} else if (cellAttr === "views-field views-field-field-room-type") {
 					const textNode = findChildTag(cell, "#text");
-					if (textNode) currRoom.type = textNode.value.trim();
+					currRoom.type = textNode.value.trim();
 				} else if (cellAttr === "views-field views-field-field-room-number") {
 					const linkNode = findChildTag(cell, "a");
 					currRoom.href = getAttribute(linkNode, "href");
 					const textNode = findChildTag(linkNode, "#text");
-					if (textNode) currRoom.number = textNode.value.trim();
+					currRoom.number = textNode.value.trim();
 				}
 			}
 		}
 
-		if (currRoom.number && currRoom.href && currRoom.type && currRoom.furniture && currRoom.seats) {
-			currRoom.name = `${currRoom.shortname}_${currRoom.number}`;
-			return currRoom;
-		}
 
-		return null;
+		currRoom.name = `${currRoom.shortname}_${currRoom.number}`;
+		return currRoom;
+
 	}
 
 	private fetchBuildingFiles(table: any): Set<any> {
