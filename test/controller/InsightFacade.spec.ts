@@ -305,6 +305,8 @@ describe("InsightFacade", function () {
 		it("[valid/check_not_and_logic.json] test negation and logic", checkQuery);
 		it("[valid/empty_return.json] test query with no results", checkQuery);
 
+		it("[valid/test_grouping.json]", checkQuery);
+
 		//invalid tests
 		it("[invalid/invalid.json] Query missing WHERE", checkQuery);
 		it("[invalid/missing_options.json] Query missing OPTIONS", checkQuery);
