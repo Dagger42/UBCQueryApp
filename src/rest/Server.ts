@@ -3,11 +3,14 @@ import { StatusCodes } from "http-status-codes";
 import { Log } from "@ubccpsc310/project-support";
 import * as http from "http";
 import cors from "cors";
+import InsightFacade from "../controller/InsightFacade";
+import { InsightDatasetKind, InsightError, NotFoundError } from "../controller/IInsightFacade";
 
 export default class Server {
 	private readonly port: number;
 	private express: Application;
 	private server: http.Server | undefined;
+	private insightFacade: InsightFacade = new InsightFacade();
 
 	constructor(port: number) {
 		Log.info(`Server::<init>( ${port} )`);
@@ -89,7 +92,64 @@ export default class Server {
 		this.express.get("/echo/:msg", Server.echo);
 
 		// TODO: your other endpoints should go here
+		this.express.put("/dataset/:id/:kind", this.requestAddDataset);
+		this.express.delete("/dataset/:id", this.requestDeleteDataset);
+		this.express.post("/query", this.requestQuery);
+		this.express.get("/datasets", this.requestListDatasets);
 	}
+
+	private requestAddDataset = async (req: Request, res: Response): Promise<void> => {
+		const { id, kind } = req.params;
+		//Log.info("Requesting add dataset: " + id + " " + kind);
+		try {
+			if (!Buffer.isBuffer(req.body)) {
+				res.status(StatusCodes.BAD_REQUEST).json({ error: "Invalid file format" });
+				return;
+			}
+
+			const base64 = req.body.toString("base64");
+
+			const datasetKind = kind === "sections" ? InsightDatasetKind.Sections : InsightDatasetKind.Rooms;
+
+			const result = await this.insightFacade.addDataset(id, base64, datasetKind);
+			res.status(StatusCodes.OK).json({ result });
+		} catch (e) {
+			Log.info("Error!");
+			res.status(StatusCodes.BAD_REQUEST).json({ error: e });
+		}
+	};
+
+	private requestDeleteDataset = async (req: Request, res: Response): Promise<void> => {
+		try {
+			const dataset = await this.insightFacade.removeDataset(req.params.id);
+			res.status(StatusCodes.OK).json({ result: dataset });
+		} catch (err) {
+			if (err instanceof InsightError) {
+				res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+			}
+
+			if (err instanceof NotFoundError) {
+				res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+			}
+		}
+	};
+
+	private requestListDatasets = async (_req: Request, res: Response): Promise<void> => {
+		const result = await this.insightFacade.listDatasets();
+		res.status(StatusCodes.OK).json({ result });
+	};
+
+	private requestQuery = async (req: Request, res: Response): Promise<void> => {
+		try {
+			const result = await this.insightFacade.performQuery(req.body);
+			res.status(StatusCodes.OK).json({ result });
+		} catch (err) {
+			if (err instanceof InsightError) {
+				Log.info("Invalid query");
+			}
+			res.status(StatusCodes.BAD_REQUEST).json({ error: err });
+		}
+	};
 
 	// The next two methods handle the echo service.
 	// These are almost certainly not the best place to put these, but are here for your reference.
