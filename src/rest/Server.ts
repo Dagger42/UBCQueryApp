@@ -113,9 +113,9 @@ export default class Server {
 
 			const result = await this.insightFacade.addDataset(id, base64, datasetKind);
 			res.status(StatusCodes.OK).json({ result });
-		} catch (e) {
+		} catch (_err) {
 			Log.info("Error!");
-			res.status(StatusCodes.BAD_REQUEST).json({ error: e });
+			res.status(StatusCodes.BAD_REQUEST).json({ error: "Couldn't add dataset" });
 		}
 	};
 
@@ -125,11 +125,11 @@ export default class Server {
 			res.status(StatusCodes.OK).json({ result: dataset });
 		} catch (err) {
 			if (err instanceof InsightError) {
-				res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+				res.status(StatusCodes.BAD_REQUEST).json({ error: "invalid ID specified" });
 			}
 
 			if (err instanceof NotFoundError) {
-				res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+				res.status(StatusCodes.NOT_FOUND).json({ error: "dataset does not exist" });
 			}
 		}
 	};
@@ -143,11 +143,8 @@ export default class Server {
 		try {
 			const result = await this.insightFacade.performQuery(req.body);
 			res.status(StatusCodes.OK).json({ result });
-		} catch (err) {
-			if (err instanceof InsightError) {
-				Log.info("Invalid query");
-			}
-			res.status(StatusCodes.BAD_REQUEST).json({ error: err });
+		} catch (_err) {
+			res.status(StatusCodes.BAD_REQUEST).json({ error: "Invalid Query" });
 		}
 	};
 
