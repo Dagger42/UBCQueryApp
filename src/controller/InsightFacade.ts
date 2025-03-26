@@ -47,8 +47,9 @@ export default class InsightFacade implements IInsightFacade {
 
 	// Checks if there exists a dataset on disk with given id
 	private async localHas(id: string): Promise<boolean> {
-		const filePath = path.resolve(__dirname, "../../data", id + ".json");
-		return await fs.pathExists(filePath);
+		const filePath = path.resolve(__dirname, "../../data");
+		const files = await fs.readdir(filePath);
+		return files.includes(id + ".json");
 	}
 
 	public async addDataset(id: string, content: string, kind: InsightDatasetKind): Promise<string[]> {
