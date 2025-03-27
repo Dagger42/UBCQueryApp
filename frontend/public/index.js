@@ -1,10 +1,15 @@
 
 
 const addDatasetBtn = document.getElementById("upload");
+const displayChartBtn = document.getElementById("updateChart");
 
 document.addEventListener('DOMContentLoaded', async function() {
 	await updateDatasets();
 }, false);
+
+displayChartBtn.addEventListener("click", async function() {
+
+})
 
 addDatasetBtn.addEventListener("click", async (e) => {
 	const file = document.getElementById("zipFile").files[0];
@@ -29,13 +34,18 @@ addDatasetBtn.addEventListener("click", async (e) => {
 	}
 });
 
+
+
 async function updateDatasets() {
 	const response = await fetch("/datasets");
 	const json = await response.json();
 	const listGroup = document.getElementById("datasetList");
 	const noDatasets = document.getElementById("no-datasets");
+	const chooseDataset = document.getElementById("chooseDataset");
+
 
 	listGroup.innerHTML = "";
+	chooseDataset.innerHTML = `<option selected disabled>Choose...</option>`;
 
 	json.result.forEach((dataset) => {
 		const item = document.createElement("li");
@@ -47,6 +57,11 @@ async function updateDatasets() {
       `;
 
 		listGroup.appendChild(item);
+
+		const option = document.createElement("option");
+		option.value = dataset.id;
+		option.textContent = dataset.id;
+		chooseDataset.appendChild(option);
 	});
 
 	if (json.result.length === 0) {
