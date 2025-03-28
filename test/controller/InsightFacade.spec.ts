@@ -308,6 +308,7 @@ describe("InsightFacade", function () {
 		it("[valid/empty_return.json] test query with no results", checkQuery);
 		it("[valid/rooms_all_valid.json] test query no filter on rooms", checkQuery);
 		it("[valid/rooms_check_tables_seats300.json] test query on tables + seats", checkQuery);
+		it("[valid/group_empty.json]", checkQuery);
 
 		it("[valid/test_grouping.json]", checkQuery);
 

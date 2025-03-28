@@ -14,7 +14,8 @@ export class QueryGroup {
 	private groupKeys: string[] = [];
 	private anyKeyToQueryKey: Record<string, string> = {};
 
-	public initialize(dataset: string, transformations: any, keyValidatorFunc: Function): boolean {
+	public initialize(dataset: string, transformations: any, keyValidatorFunc: Function,
+					  emptyWhere : boolean): boolean {
 		this.dataset = dataset;
 		if (typeof transformations !== "object") {
 			return false;
@@ -38,8 +39,18 @@ export class QueryGroup {
 
 		for (const key of groupList) {
 			const { isValid, datasetId } = keyValidatorFunc(key);
-			if (!isValid || datasetId !== dataset) {
+			if (!isValid) {
 				return false;
+			}
+
+			if (emptyWhere) {
+				if (this.dataset === undefined) {
+					this.dataset = datasetId;
+				} else {
+					if (this.dataset !== datasetId) {
+						return false;
+					}
+				}
 			}
 
 			this.groupKeys.push(key);

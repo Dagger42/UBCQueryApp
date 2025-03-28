@@ -115,7 +115,9 @@ export default class Server {
 			res.status(StatusCodes.OK).json({ result });
 		} catch (_err) {
 			Log.info("Error!");
-			res.status(StatusCodes.BAD_REQUEST).json({ error: "Couldn't add dataset" });
+			if (_err instanceof InsightError) {
+				res.status(StatusCodes.BAD_REQUEST).json({ error: _err.message });
+			}
 		}
 	};
 

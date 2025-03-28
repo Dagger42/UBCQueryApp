@@ -23,8 +23,8 @@
 			</div>
 			<button id="upload" type="button" class="btn btn-info w-100">Create Dataset</button>
 		</div>
-		<div class="col-md-4 mt-4 ms-4 p-4 border rounded bg-light">
-			<h5>Sections Insights</h5>
+		<div class="col-sm-5 mt-4 ms-4 p-4 border rounded bg-light">
+			<h5>Yearly Trends Insights</h5>
 			<div class="row mb-3 mt-3">
 				<label for="chooseDataset" class="col-sm-7 col-form-label">Select Dataset</label>
 				<div class="col-sm-5">
@@ -35,22 +35,24 @@
 				</div>
 			</div>
 			<div class="row mb-3 mt-3">
-				<div class="col-md-4">
-					<select class="form-select border text-secondary">
-							<option selected disabled>Dept.</option>
+				<div class="col-md-3">
+					<select id="dept" class="form-select border text-secondary">
+						<option selected disabled>Dept.</option>
 						<option>...</option>
 					</select>
 				</div>
 				<div class="col-md-4">
-					<select class="form-select border text-secondary">
+					<select id="courseNumber" class="form-select border text-secondary">
 						<option selected disabled>Course #</option>
 						<option>...</option>
 					</select>
 				</div>
-				<div class="col-md-4">
-					<select class="form-select border text-secondary">
+				<div class="col-md-5">
+					<select id = "insightType" class="form-select border text-secondary">
 						<option selected disabled>Insight</option>
-						<option>...</option>
+						<option>Course Averages</option>
+						<option>Pass vs Fail</option>
+						<option>Number of Sections</option>
 					</select>
 				</div>
 			</div>
@@ -65,8 +67,13 @@
 			    <ul id="datasetList" class="list-group" style="max-height: 150px; min-height: 150px; overflow-y: auto;">
 				</ul>
 		</div>
+		<div class="col-md-5 mt-sm-5 ms-4 p-4 border rounded bg-light">
+			<h5>Data Visualization</h5>
+			<canvas id="myChart" width="500px" height="200"></canvas>
+		</div>
 	</div>
 </div>
-<script src="./index.js" type="text/javascript"></script>
+<script src="./index.js" type="module"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>

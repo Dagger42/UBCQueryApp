@@ -125,7 +125,8 @@ export class QueryProcessor {
 		if ("TRANSFORMATIONS" in input) {
 			hasTransforms = true;
 			const trans = input.TRANSFORMATIONS;
-			if (!this.queryGroup?.initialize(this.seenDatasets[0], trans, this.isValidKey)) {
+			const emptyWhere = Object.keys(where).length === 0;
+			if (!this.queryGroup?.initialize(this.seenDatasets[0], trans, this.isValidKey, emptyWhere)) {
 				return false;
 			}
 		}
