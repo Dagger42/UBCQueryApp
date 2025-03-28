@@ -144,6 +144,7 @@ async function fetchQueryResult(num, dept, dataset, insight) {
                 		})
                 	})
         	const jsonRes2 = await result2.json();
+		  buildChartPassFail(jsonRes2, dataset, dept, num);
 		  	break;
       case "Number of Sections":
       const result3 = await fetch("/query", {
@@ -184,19 +185,59 @@ async function fetchQueryResult(num, dept, dataset, insight) {
 }
 
 function buildChartPassFail(jsonData, dataset, dept, num) {
+	const noOverall = jsonData.result.filter(item => item[dataset + "_year"] !== 1900);
+	const labels = noOverall.map(item => item[dataset + "_year"]);
+	const pass = noOverall.map(item => item.overallPass);
+	const fail = noOverall.map(item => item.overallFail);
 
+	const ctx1 = document.getElementById('myChart')?.getContext('2d');
+
+	if (myChart) {
+		myChart.destroy();
+	}
+
+	myChart = new Chart(ctx1, {
+		type: 'bar',
+		data: {
+			labels: labels,
+			datasets: [
+				{
+				label: ["Pass " + dept + ' ' + num],
+				data: pass,
+				borderWidth: 2,
+				fill: false
+				},
+				{
+					label: ["Fail " + dept + ' ' + num],
+					data: fail,
+					borderWidth: 2,
+					fill: false
+				}
+				]
+		},
+		options: {
+			responsive: true,
+			scales: {
+				y: {
+					beginAtZero: false
+				}
+			}
+		}
+	});
 }
 
 
 function buildChartSectionsAndAverages(jsonData, dataset, dept, num, sections) {
-    const labels = jsonData.result.map(item => item[dataset + "_year"]);
+	const noOverall = jsonData.result.filter(item => item[dataset + "_year"] !== 1900);
+
+    const labels = noOverall.map(item => item[dataset + "_year"]);
 	let title;
 	let overall;
     if (!sections) {
-    	overall = jsonData.result.map(item => item.overallAvg);
+    	overall = noOverall.map(item => item.overallAvg);
 		title = "Overall Avg. ";
     } else {
-		overall = jsonData.result.map(item => item.overallSections);
+		overall = noOverall.map(item => item.overallSections);
 		title = "# of Sections ";
     }
 
