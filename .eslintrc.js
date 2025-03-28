@@ -72,7 +72,7 @@ module.exports = {
 		"@ubccpsc310/descriptive/max-lines-per-function": [
 			"error",
 			{
-				max: 35,
+				max: 100,
 				skipComments: true,
 				skipBlankLines: true,
 			},

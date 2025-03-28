@@ -1,0 +1,21 @@
+{
+	"WHERE": {},
+	"OPTIONS": {
+		"COLUMNS": [
+			"sections_dept",
+			"overallAvg"
+		]
+	},
+	"TRANSFORMATIONS": {
+		"GROUP": [
+			"sections_dept"
+		],
+		"APPLY": [
+			{
+				"overallAvg": {
+					"AVG": "sections_avg"
+				}
+			}
+		]
+	}
+}
